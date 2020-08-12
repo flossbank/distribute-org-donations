@@ -1,0 +1,43 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Distributes organization donations to the either their version control packages or to the global ecosystem
+Parameters:
+  MongoUri:
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: '/api/db/mongo_uri'
+Resources:
+  DistributeOrgDonationsDeadLetterQueue:
+    Type: AWS::SQS::Queue
+  DistributeOrgDonationsQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: distribute-org-donations-input
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt DistributeOrgDonationsDeadLetterQueue.Arn
+        maxReceiveCount: 3
+      VisibilityTimeout: 240
+  DistributeOrgDonationsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Timeout: 180
+      Handler: index.handler
+      Runtime: nodejs10.x
+      CodeUri: ./
+      Events:
+        DistributeOrgDonationsEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt DistributeOrgDonationsQueue.Arn
+            BatchSize: 1
+      Policies:
+        - AmazonSQSFullAccess
+        - AmazonDynamoDBFullAccess
+        - Statement:
+          - Effect: Allow
+            Action:
+              - 'kms:Decrypt'
+              - 'kms:ListKeys'
+            Resource: '*'
+      Environment:
+        Variables:
+          MONGO_URI: !Ref MongoUri
