@@ -11,14 +11,12 @@
 - Get organization info from SQS event
 - Lock on org id for processing so no other lambda duplicates the work
 - Look up organization in mongo
-- If !globalDonation: look up one of the admin's refresh tokens for github
-    1. request temporary access from github using refresh token
-    2. search organization's repositories for supported manifests (packages.jsons)
-    3. download all supported manifests, grouped by registry/language (e.g. NPM+JS)
-    4. merge grouped manifests into single list of Top Level Pkgs (maintaining duplicates)
-    5. determine package dependencies to create map of package weights
-3. if globalDonation:
-    1. run mongo aggregation to create a map of packages to their global weight
+- Look up one of the admin's refresh tokens for github
+- Request temporary access from github using refresh token
+- Search organization's repositories for supported manifests (packages.jsons)
+- Download all supported manifests, grouped by registry/language (e.g. NPM+JS)
+- Merge grouped manifests into single list of Top Level Pkgs (maintaining duplicates)
+- Determine package dependencies to create map of package weights
 - Compute per-package donation amount (donation * pkgWeight)
 - Write computed donation for each package to their respective donationRevenue log
 */
