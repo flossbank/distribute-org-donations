@@ -4,11 +4,15 @@ const Process = require('../lib/process')
 
 test.beforeEach((t) => {
   t.context.db = {
+    getNoCompList: sinon.stub(),
     distributeOrgDonation: sinon.stub()
   }
   t.context.dynamo = {
     lockOrg: sinon.stub().resolves({ success: true }),
     unlockOrg: sinon.stub().resolves({ success: true })
+  }
+  t.context.resolver = {
+    computePackageWeight: sinon.stub().resolves(new Map())
   }
   t.context.log = { log: sinon.stub() }
   t.context.recordBody = {
@@ -36,16 +40,19 @@ test('process | success', async (t) => {
     db: t.context.db,
     log: t.context.log,
     dynamo: t.context.dynamo,
-    record: t.context.testRecord
+    record: t.context.testRecord,
+    resolver: t.context.resolver
   })
-  t.true(t.context.dynamo.lockOrg.calledWith({ organizationId: 'test-org-id' }))
   const expectedDonationAmount = ((t.context.recordBody.amount * 0.96) - 30) * 1000
+
+  t.deepEqual(res, { success: true })
+  t.true(t.context.dynamo.lockOrg.calledWith({ organizationId: 'test-org-id' }))
   t.true(t.context.db.distributeOrgDonation.calledWith({
     donationAmount: expectedDonationAmount,
     packageWeightsMap: new Map(),
     organizationId: 'test-org-id'
   }))
-  t.deepEqual(res, { success: true })
+  t.true(t.context.dynamo.unlockOrg.calledWith({ organizationId: 'test-org-id' }))
 })
 
 test('process | failure, undefined org id', async (t) => {
@@ -53,7 +60,8 @@ test('process | failure, undefined org id', async (t) => {
     db: t.context.db,
     log: t.context.log,
     dynamo: t.context.dynamo,
-    record: t.context.undefinedOrgTestRecord
+    record: t.context.undefinedOrgTestRecord,
+    resolver: t.context.resolver
   }))
 })
 
@@ -63,7 +71,8 @@ test('process | failure, org already locked', async (t) => {
     db: t.context.db,
     log: t.context.log,
     dynamo: t.context.dynamo,
-    record: t.context.testRecord
+    record: t.context.testRecord,
+    resolver: t.context.resolver
   }))
   t.false(t.context.db.distributeOrgDonation.calledOnce)
 })
@@ -74,6 +83,7 @@ test('process | failure, distributeOrgDonation fails', async (t) => {
     db: t.context.db,
     log: t.context.log,
     dynamo: t.context.dynamo,
-    record: t.context.testRecord
+    record: t.context.testRecord,
+    resolver: t.context.resolver
   }))
 })
