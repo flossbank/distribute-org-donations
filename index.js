@@ -1,4 +1,5 @@
 const AWS = require('aws-sdk')
+const RegistryResolver = require('@flossbank/registry-resolver')
 const Process = require('./lib/process')
 const Config = require('./lib/config')
 const Db = require('./lib/mongo')
@@ -27,10 +28,13 @@ exports.handler = async (event) => {
   const db = new Db({ config })
   await db.connect()
 
+  const epsilon = await config.getCompensationEpsilon()
+  const resolver = new RegistryResolver({ log, epsilon })
+
   let results
   try {
     results = await Promise.all(
-      event.Records.map(record => Process.process({ record, db, dynamo, log }))
+      event.Records.map(record => Process.process({ record, db, dynamo, resolver, log }))
     )
     if (!results.every(result => result.success)) {
       throw new Error(JSON.stringify(results))
