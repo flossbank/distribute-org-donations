@@ -9,6 +9,7 @@
     "test": "standard && ava -v"
   },
   "dependencies": {
+    "@flossbank/registry-resolver": "^1.0.0",
     "aws-sdk": "^2.543.0",
     "mongodb": "^3.4.1"
   },
