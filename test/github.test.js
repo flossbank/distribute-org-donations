@@ -15,7 +15,7 @@ test.afterEach((t) => {
   nock.cleanAll()
 })
 
-test.serial('getManifestsForOrg | success', async (t) => {
+test.serial('getAllManifestsForOrg | success', async (t) => {
   const { ghr } = t.context
 
   const scope = nock('https://api.github.com')
@@ -51,17 +51,29 @@ test.serial('getManifestsForOrg | success', async (t) => {
   const searchPattern = {
     registry: 'npm',
     language: 'javascript',
-    pattern: 'package.json'
+    patterns: ['package.json']
   }
 
-  const manifests = await ghr.getManifestsForOrg('flossbank', searchPattern, 'token')
+  const manifests = await ghr.getAllManifestsForOrg('flossbank', [searchPattern], 'token')
 
   t.notThrows(() => scope.done())
 
   t.deepEqual(manifests, [
-    'cli_package.json',
-    'cli_ci_package.json',
-    'splash_package.json'
+    {
+      language: 'javascript',
+      registry: 'npm',
+      manifest: 'cli_package.json'
+    },
+    {
+      language: 'javascript',
+      registry: 'npm',
+      manifest: 'cli_ci_package.json'
+    },
+    {
+      language: 'javascript',
+      registry: 'npm',
+      manifest: 'splash_package.json'
+    }
   ])
 })
 
@@ -77,7 +89,7 @@ test.serial('getManifestsForOrg | bad github response to search', async (t) => {
   const searchPattern = {
     registry: 'npm',
     language: 'javascript',
-    pattern: 'package.json'
+    patterns: ['package.json']
   }
   const manifests = await ghr.getManifestsForOrg('flossbank', searchPattern, 'token')
   t.notThrows(() => scope.done())
@@ -101,7 +113,7 @@ test.serial('getManifestsForOrg | caches', async (t) => {
   const searchPattern = {
     registry: 'npm',
     language: 'javascript',
-    pattern: 'package.json'
+    patterns: ['package.json']
   }
   const manifestsFirst = await ghr.getManifestsForOrg('flossbank', searchPattern, 'token')
   t.notThrows(() => scope.done())
