@@ -15,13 +15,15 @@ test.beforeEach((t) => {
   })
 
   t.context.organizationId = 'aaaaaaaaaaaa'
-  t.context.packageWeightsMap = new Map([['package-1aaa', 0.015], ['package-2bbb', 0.5], ['package-3ccc', 1.5]])
+  t.context.packageWeightsMap = new Map([['standard', 0.05], ['js-deep-equals', 0.75], ['yttrium-server', 0.2]])
 
   t.context.mongo.db = {
     collection: sinon.stub().returns({
       initializeUnorderedBulkOp: sinon.stub().returns({
         find: sinon.stub().returns({
-          updateOne: sinon.stub()
+          upsert: sinon.stub().returns({
+            updateOne: sinon.stub()
+          })
         }),
         execute: sinon.stub().returns({ nModified: 2 })
       })
@@ -52,42 +54,52 @@ test('bail on empty package weights map', async (t) => {
   await t.context.mongo.distributeOrgDonation({
     organizationId: t.context.organizationId,
     packageWeightsMap: new Map(),
+    registry: 'npm',
+    langauge: 'javascript',
     donationAmount
   })
   // Should not call bulk op
-  t.false(t.context.mongo.db.collection().initializeUnorderedBulkOp().find().updateOne.calledOnce)
+  t.false(t.context.mongo.db.collection().initializeUnorderedBulkOp().find().upsert().updateOne.called)
 })
 
 test('distribute org donation | success', async (t) => {
+  const { packageWeightsMap, organizationId, mongo } = t.context
   const donationAmount = 1000000 // 10 bucks in mc
-  const packageWeightsMap = t.context.packageWeightsMap
-  const expectedTotalMass = [...t.context.packageWeightsMap.values()].reduce((acc, val) => acc + val, 0)
-  await t.context.mongo.distributeOrgDonation({ organizationId: t.context.organizationId, packageWeightsMap, donationAmount })
+  const language = 'javascript'
+  const registry = 'npm'
+  await mongo.distributeOrgDonation({
+    organizationId,
+    packageWeightsMap,
+    language,
+    registry,
+    donationAmount
+  })
+
   // 3 pushes for 3 diff packages in our packageWeightsMap
-  t.true(t.context.mongo.db.collection().initializeUnorderedBulkOp().find().updateOne.calledWith({
+  t.true(t.context.mongo.db.collection().initializeUnorderedBulkOp().find().upsert().updateOne.calledWith({
     $push: {
       donationRevenue: {
-        organizationId: t.context.organizationId,
+        organizationId,
         timestamp: 1234,
-        amount: ((packageWeightsMap.get('package-1aaa') / expectedTotalMass) * donationAmount)
+        amount: packageWeightsMap.get('standard') * donationAmount
       }
     }
   }))
-  t.true(t.context.mongo.db.collection().initializeUnorderedBulkOp().find().updateOne.calledWith({
+  t.true(t.context.mongo.db.collection().initializeUnorderedBulkOp().find().upsert().updateOne.calledWith({
     $push: {
       donationRevenue: {
         organizationId: t.context.organizationId,
         timestamp: 1234,
-        amount: ((packageWeightsMap.get('package-2bbb') / expectedTotalMass) * donationAmount)
+        amount: packageWeightsMap.get('yttrium-server') * donationAmount
       }
     }
   }))
-  t.true(t.context.mongo.db.collection().initializeUnorderedBulkOp().find().updateOne.calledWith({
+  t.true(t.context.mongo.db.collection().initializeUnorderedBulkOp().find().upsert().updateOne.calledWith({
     $push: {
       donationRevenue: {
         organizationId: t.context.organizationId,
         timestamp: 1234,
-        amount: ((packageWeightsMap.get('package-3ccc') / expectedTotalMass) * donationAmount)
+        amount: packageWeightsMap.get('js-deep-equals') * donationAmount
       }
     }
   }))
