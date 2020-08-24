@@ -3,18 +3,55 @@ const sinon = require('sinon')
 const Process = require('../lib/process')
 
 test.beforeEach((t) => {
-  t.context.db = {
-    getNoCompList: sinon.stub(),
+  const db = {
+    getNoCompList: sinon.stub().resolves(new Set()),
     distributeOrgDonation: sinon.stub()
   }
-  t.context.dynamo = {
+  const dynamo = {
     lockOrg: sinon.stub().resolves({ success: true }),
     unlockOrg: sinon.stub().resolves({ success: true })
   }
-  t.context.resolver = {
-    computePackageWeight: sinon.stub().resolves(new Map())
+  const resolver = {
+    getSupportedManifestPatterns: sinon.stub().resolves(['package.json']),
+    extractDependenciesFromManifests: sinon.stub().returns([{
+      language: 'javascript',
+      registry: 'npm',
+      deps: ['standard', 'js-deep-equals', 'yttrium-server']
+    }, {
+      language: 'php',
+      registry: 'idk',
+      deps: ['some-php-dep']
+    }, {
+      language: 'haskell',
+      registry: 'idk',
+      deps: []
+    }]),
+    computePackageWeight: sinon.stub()
+      .onFirstCall().resolves(new Map([['standard', 0.5], ['js-deep-equals', 0.2], ['yttrium-server', 0.3]]))
+      .onSecondCall().resolves(new Map([['some-php-dep', 1]]))
+      .onThirdCall().resolves(new Map())
   }
-  t.context.log = { log: sinon.stub() }
+  const retriever = {
+    getAllManifestsForOrg: sinon.stub().returns([{
+      language: 'javascript',
+      registry: 'npm',
+      manifest: JSON.stringify({ dependencies: { standard: '12.0.1' } })
+    }, {
+      language: 'php',
+      registry: 'idk',
+      manifest: 'asdf'
+    }])
+  }
+  const log = { log: sinon.stub() }
+
+  t.context.services = {
+    db,
+    dynamo,
+    resolver,
+    retriever,
+    log
+  }
+
   t.context.recordBody = {
     amount: 1000,
     timestamp: 1234,
@@ -36,23 +73,49 @@ test.beforeEach((t) => {
 })
 
 test('process | success', async (t) => {
+  const { services, testRecord, recordBody } = t.context
   const res = await Process.process({
-    db: t.context.db,
-    log: t.context.log,
-    dynamo: t.context.dynamo,
-    record: t.context.testRecord,
-    resolver: t.context.resolver
+    record: testRecord,
+    ...services
   })
-  const expectedDonationAmount = ((t.context.recordBody.amount * 0.96) - 30) * 1000
+  const expectedDonationAmount = ((recordBody.amount * 0.96) - 30) * 1000
 
   t.deepEqual(res, { success: true })
-  t.true(t.context.dynamo.lockOrg.calledWith({ organizationId: 'test-org-id' }))
-  t.true(t.context.db.distributeOrgDonation.calledWith({
-    donationAmount: expectedDonationAmount,
-    packageWeightsMap: new Map(),
-    organizationId: 'test-org-id'
+  t.true(services.dynamo.lockOrg.calledWith({ organizationId: 'test-org-id' }))
+  t.true(services.resolver.getSupportedManifestPatterns.calledOnce)
+  t.true(services.retriever.getAllManifestsForOrg.calledOnce)
+  t.true(services.resolver.extractDependenciesFromManifests.calledOnce)
+
+  t.true(services.db.getNoCompList.calledWith({ language: 'javascript', registry: 'npm' }))
+  t.true(services.db.getNoCompList.calledWith({ language: 'php', registry: 'idk' }))
+  t.true(services.resolver.computePackageWeight.calledWith({
+    language: 'javascript',
+    noCompList: new Set(),
+    registry: 'npm',
+    topLevelPackages: ['standard', 'js-deep-equals', 'yttrium-server']
   }))
-  t.true(t.context.dynamo.unlockOrg.calledWith({ organizationId: 'test-org-id' }))
+  t.true(services.resolver.computePackageWeight.calledWith({
+    language: 'php',
+    registry: 'idk',
+    noCompList: new Set(),
+    topLevelPackages: ['some-php-dep']
+  }))
+
+  t.deepEqual(services.db.distributeOrgDonation.firstCall.firstArg, {
+    donationAmount: Math.floor(expectedDonationAmount * (3 / 4)), // donation for 3 JavaScript deps out of 4 total deps found
+    packageWeightsMap: new Map([['standard', 0.5], ['js-deep-equals', 0.2], ['yttrium-server', 0.3]]),
+    language: 'javascript',
+    registry: 'npm',
+    organizationId: 'test-org-id'
+  })
+  t.deepEqual(services.db.distributeOrgDonation.secondCall.firstArg, {
+    donationAmount: Math.floor(expectedDonationAmount * (1 / 4)), // donation for 1 PHP dep out of 4 total deps found
+    packageWeightsMap: new Map([['some-php-dep', 1]]),
+    language: 'php',
+    registry: 'idk',
+    organizationId: 'test-org-id'
+  })
+  t.true(services.dynamo.unlockOrg.calledWith({ organizationId: 'test-org-id' }))
 })
 
 test('process | failure, undefined org id', async (t) => {
@@ -61,29 +124,28 @@ test('process | failure, undefined org id', async (t) => {
     log: t.context.log,
     dynamo: t.context.dynamo,
     record: t.context.undefinedOrgTestRecord,
-    resolver: t.context.resolver
+    resolver: t.context.resolver,
+    retriever: t.context.retriever
   }))
 })
 
 test('process | failure, org already locked', async (t) => {
-  t.context.dynamo.lockOrg.rejects()
+  const { services } = t.context
+  const { dynamo } = services
+  dynamo.lockOrg.rejects()
   await t.throwsAsync(Process.process({
-    db: t.context.db,
-    log: t.context.log,
-    dynamo: t.context.dynamo,
     record: t.context.testRecord,
-    resolver: t.context.resolver
+    ...services
   }))
-  t.false(t.context.db.distributeOrgDonation.calledOnce)
+  t.false(services.db.distributeOrgDonation.calledOnce)
 })
 
 test('process | failure, distributeOrgDonation fails', async (t) => {
-  t.context.db.distributeOrgDonation.rejects()
+  const { services } = t.context
+  const { db } = services
+  db.distributeOrgDonation.rejects()
   await t.throwsAsync(Process.process({
-    db: t.context.db,
-    log: t.context.log,
-    dynamo: t.context.dynamo,
     record: t.context.testRecord,
-    resolver: t.context.resolver
+    ...services
   }))
 })
