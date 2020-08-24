@@ -9,8 +9,9 @@
     "test": "standard && ava -v"
   },
   "dependencies": {
-    "@flossbank/registry-resolver": "^1.0.0",
+    "@flossbank/registry-resolver": "^1.2.1",
     "aws-sdk": "^2.543.0",
+    "call-limit": "^1.1.1",
     "gh-got": "^9.0.0",
     "minimatch": "^3.0.4",
     "mongodb": "^3.4.1",
@@ -33,10 +34,11 @@
   },
   "homepage": "https://github.com/flossbank/distribute-org-donations#readme",
   "devDependencies": {
-    "ava": "^3.5.1",
+    "ava": "^3.12.1",
     "husky": "^4.2.5",
     "nock": "^13.0.4",
     "nyc": "^15.0.0",
+    "pino-pretty": "^4.1.0",
     "sinon": "^9.0.1",
     "standard": "^14.3.1"
   }
