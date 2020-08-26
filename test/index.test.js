@@ -24,7 +24,6 @@ test.after.always(() => {
 })
 
 test.serial('processes records and closes db', async (t) => {
-  t.pass()
   await index.handler({
     Records: [{ body: 'blah' }]
   })
@@ -33,8 +32,15 @@ test.serial('processes records and closes db', async (t) => {
 })
 
 test.serial('throws on processing errors', async (t) => {
-  t.pass()
   Process.process.rejects()
+  await t.throwsAsync(index.handler({
+    Records: [{ body: 'blah' }]
+  }))
+  t.true(Db.prototype.close.calledOnce)
+})
+
+test.serial('throws on processing errors | explicit non success', async (t) => {
+  Process.process.resolves({ success: false })
   await t.throwsAsync(index.handler({
     Records: [{ body: 'blah' }]
   }))

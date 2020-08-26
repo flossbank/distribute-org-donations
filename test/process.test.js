@@ -5,6 +5,7 @@ const Process = require('../lib/process')
 test.beforeEach((t) => {
   const db = {
     getNoCompList: sinon.stub().resolves(new Set()),
+    getOrgAccessToken: sinon.stub().resolves({ name: 'flossbank', accessToken: 'asdf' }),
     distributeOrgDonation: sinon.stub()
   }
   const dynamo = {
@@ -42,7 +43,7 @@ test.beforeEach((t) => {
       manifest: 'asdf'
     }])
   }
-  const log = { log: sinon.stub() }
+  const log = { info: sinon.stub() }
 
   t.context.services = {
     db,
@@ -119,13 +120,10 @@ test('process | success', async (t) => {
 })
 
 test('process | failure, undefined org id', async (t) => {
+  const { services } = t.context
   await t.throwsAsync(Process.process({
-    db: t.context.db,
-    log: t.context.log,
-    dynamo: t.context.dynamo,
-    record: t.context.undefinedOrgTestRecord,
-    resolver: t.context.resolver,
-    retriever: t.context.retriever
+    ...services,
+    record: t.context.undefinedOrgTestBody
   }))
 })
 
