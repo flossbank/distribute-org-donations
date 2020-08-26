@@ -21,7 +21,7 @@ Resources:
     Properties:
       Timeout: 180
       Handler: index.handler
-      Runtime: nodejs10.x
+      Runtime: nodejs12.x
       CodeUri: ./
       Events:
         DistributeOrgDonationsEvent:
