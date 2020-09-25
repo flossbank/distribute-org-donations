@@ -11,6 +11,9 @@ test.beforeEach((t) => {
   t.context.mongo = new Mongo({
     config: {
       getMongoUri: async () => 'mongodb+srv://0.0.0.0/test'
+    },
+    log: {
+      info: sinon.stub()
     }
   })
 
@@ -47,6 +50,84 @@ test('close', async (t) => {
   t.context.mongo.mongoClient = { close: sinon.stub() }
   await t.context.mongo.close()
   t.true(t.context.mongo.mongoClient.close.calledOnce)
+})
+
+test('get org access token', async (t) => {
+  const { mongo } = t.context
+
+  const user = { codeHost: { GitHub: { accessToken: 'asdf' } } }
+  const organization = {
+    name: 'flossbank',
+    host: 'GitHub',
+    users: [{ userId: 'bbbbbbbbbbbb', role: 'WRITE' }]
+  }
+  mongo.db = {
+    collection: (col) => ({
+      findOne: sinon.stub().resolves(col === 'users' ? user : organization)
+    })
+  }
+
+  const res = await mongo.getOrgAccessToken({ organizationId: 'aaaaaaaaaaaa' })
+  t.deepEqual(res, { name: 'flossbank', host: 'GitHub', accessToken: 'asdf' })
+})
+
+test('get org access token | no users', async (t) => {
+  const { mongo } = t.context
+
+  const organization = {
+    name: 'flossbank',
+    host: 'GitHub',
+    users: []
+  }
+  mongo.db = {
+    collection: () => ({
+      findOne: sinon.stub().resolves(organization)
+    })
+  }
+
+  await t.throwsAsync(() => mongo.getOrgAccessToken({ organizationId: 'aaaaaaaaaaaa' }))
+})
+
+test('get org access token | user not found', async (t) => {
+  const { mongo } = t.context
+
+  const organization = {
+    name: 'flossbank',
+    host: 'GitHub',
+    users: [{ userId: 'aaaaaaaaaaaa', role: 'WRITE' }]
+  }
+  mongo.db = {
+    collection: (col) => ({
+      findOne: sinon.stub().resolves(col === 'users' ? null : organization)
+    })
+  }
+  await t.throwsAsync(() => mongo.getOrgAccessToken({ organizationId: 'aaaaaaaaaaaa' }))
+})
+
+test('get no comp list | supported', async (t) => {
+  const { mongo } = t.context
+
+  mongo.db = {
+    collection: () => ({
+      findOne: sinon.stub().resolves({ language: 'javascript', registry: 'npm', list: ['react'] })
+    })
+  }
+
+  const res = await mongo.getNoCompList({ language: 'javascript', registry: 'npm' })
+  t.deepEqual(res, new Set(['react']))
+})
+
+test('get no comp list | unsupported', async (t) => {
+  const { mongo } = t.context
+
+  mongo.db = {
+    collection: () => ({
+      findOne: sinon.stub().resolves()
+    })
+  }
+
+  const res = await mongo.getNoCompList({ language: 'javascript', registry: 'npm' })
+  t.deepEqual(res, new Set())
 })
 
 test('bail on empty package weights map', async (t) => {

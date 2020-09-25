@@ -13,6 +13,9 @@ test.after(() => {
 test.beforeEach((t) => {
   t.context.dynamo = new Dynamo({
     docs: {
+      get: sinon.stub().returns({
+        promise: sinon.stub().resolves()
+      }),
       update: sinon.stub().returns({
         promise: sinon.stub().resolves({ Attributes: { a: 1 } })
       }),
@@ -46,6 +49,15 @@ test('lockOrg failure', async (t) => {
   })
 })
 
+test('lockOrg failure | already locked', async (t) => {
+  const err = new Error()
+  err.code = 'ConditionalCheckFailedException'
+  t.context.dynamo.docs.update().promise.throws(err)
+  await t.throwsAsync(t.context.dynamo.lockOrg({ organizationId: 'test-org-id' }), {
+    message: 'Organization id test-org-id is already locked'
+  })
+})
+
 test('unlockOrg success', async (t) => {
   const { dynamo } = t.context
   await dynamo.unlockOrg({ organizationId: 'abc' })
@@ -53,4 +65,16 @@ test('unlockOrg success', async (t) => {
     TableName: dynamo.LOCKS_TABLE,
     Key: { lock_key: 'abc' }
   }))
+})
+
+test('getConfigValue | config attr found', async (t) => {
+  const { dynamo } = t.context
+  dynamo.docs.get().promise.resolves({ Item: { configKey: 'abc', configValue: 'def' } })
+  t.is(await dynamo.getConfigValue('abc'), 'def')
+})
+
+test('getConfigValue | config attr not found', async (t) => {
+  const { dynamo } = t.context
+  dynamo.docs.get().promise.resolves({ })
+  t.is(await dynamo.getConfigValue('abc'), undefined)
 })
