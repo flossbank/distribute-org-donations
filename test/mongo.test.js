@@ -70,6 +70,19 @@ test('get org', async (t) => {
   t.deepEqual(res, { name: 'flossbank', host: 'GitHub', installationId: 'abc' })
 })
 
+test('get org | no org', async (t) => {
+  const { mongo } = t.context
+
+  mongo.db = {
+    collection: (col) => ({
+      findOne: sinon.stub().resolves()
+    })
+  }
+
+  const res = await mongo.getOrg({ organizationId: 'aaaaaaaaaaaa' })
+  t.is(res, undefined)
+})
+
 test('get no comp list | supported', async (t) => {
   const { mongo } = t.context
 
