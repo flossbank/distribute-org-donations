@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@flossbank/registry-resolver": "^1.2.1",
+    "@octokit/app": "^4.2.1",
     "aws-sdk": "^2.543.0",
     "call-limit": "^1.1.1",
     "gh-got": "^9.0.0",

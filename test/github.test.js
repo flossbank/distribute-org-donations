@@ -8,6 +8,9 @@ test.before((t) => {})
 
 test.beforeEach((t) => {
   const ghr = new GithubRetriever({ log })
+  ghr.app = {
+    getInstallationAccessToken: async () => 'token'
+  }
   t.context.ghr = ghr
 })
 
@@ -54,7 +57,7 @@ test.serial('getAllManifestsForOrg | success', async (t) => {
     patterns: ['package.json']
   }
 
-  const manifests = await ghr.getAllManifestsForOrg('flossbank', [searchPattern], 'token')
+  const manifests = await ghr.getAllManifestsForOrg({ name: 'flossbank', installationId: '123' }, [searchPattern])
 
   t.notThrows(() => scope.done())
 
