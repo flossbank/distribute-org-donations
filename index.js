@@ -27,7 +27,10 @@ exports.handler = async (event) => {
   const log = Pino()
   const dynamo = new Dynamo({ log, docs })
   const config = new Config({ log, kms, dynamo })
-  const retriever = new GitHub({ log })
+
+  const retriever = new GitHub({ log, config })
+  await retriever.init()
+
   const db = new Db({ log, config })
   await db.connect()
 
