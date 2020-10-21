@@ -5,7 +5,7 @@ const Process = require('../lib/process')
 test.beforeEach((t) => {
   const db = {
     getNoCompList: sinon.stub().resolves(new Set()),
-    getOrgAccessToken: sinon.stub().resolves({ name: 'flossbank', accessToken: 'asdf' }),
+    getOrg: sinon.stub().resolves({ name: 'flossbank', accessToken: 'asdf' }),
     distributeOrgDonation: sinon.stub()
   }
   const dynamo = {

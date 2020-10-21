@@ -13,9 +13,8 @@ const docs = new AWS.DynamoDB.DocumentClient({ region: 'us-west-2' })
 /*
 - Get organization info from SQS event
 - Lock on org id for processing so no other lambda duplicates the work
-- Look up organization in mongo
-- Look up one of the admin's refresh tokens for github
-- Request temporary access from github using refresh token
+- Look up organization in mongo to get installation ID
+- Request temporary access from github using GH App PEM and installation ID
 - Search organization's repositories for supported manifests (packages.jsons)
 - Download all supported manifests, grouped by registry/language (e.g. NPM+JS)
 - Merge grouped manifests into single list of Top Level Pkgs (maintaining duplicates)
