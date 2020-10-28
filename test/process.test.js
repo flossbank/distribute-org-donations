@@ -7,7 +7,8 @@ test.beforeEach((t) => {
     getNoCompList: sinon.stub().resolves(new Set()),
     getOrgAccessToken: sinon.stub().resolves({ name: 'flossbank', accessToken: 'asdf' }),
     distributeOrgDonation: sinon.stub(),
-    createOrganizationOssUsageSnapshot: sinon.stub()
+    createOrganizationOssUsageSnapshot: sinon.stub(),
+    getOrg: sinon.stub().resolves({ name: 'flossbank', accessToken: 'asdf' })
   }
   const dynamo = {
     lockOrg: sinon.stub().resolves({ success: true }),

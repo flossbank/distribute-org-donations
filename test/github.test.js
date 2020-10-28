@@ -1,4 +1,5 @@
 const test = require('ava')
+const sinon = require('sinon')
 const nock = require('nock')
 const GithubRetriever = require('../lib/github')
 
@@ -8,11 +9,52 @@ test.before((t) => {})
 
 test.beforeEach((t) => {
   const ghr = new GithubRetriever({ log })
+  ghr.app = {
+    getInstallationAccessToken: async () => 'token'
+  }
   t.context.ghr = ghr
 })
 
 test.afterEach((t) => {
   nock.cleanAll()
+})
+
+test.serial('init', async (t) => {
+  const config = {
+    getGithubAppConfig: sinon.stub().resolves({ id: 'abc', privateKey: 'def' })
+  }
+  const ghr = new GithubRetriever({ config })
+
+  await ghr.init()
+
+  t.true(config.getGithubAppConfig.calledOnce)
+})
+
+test.serial('getAllManifestsForOrg | invalid params', async (t) => {
+  const { ghr } = t.context
+
+  const searchPattern = {
+    registry: 'npm',
+    language: 'javascript',
+    patterns: ['package.json']
+  }
+
+  await t.throwsAsync(
+    () => ghr.getAllManifestsForOrg({ installationId: '123' }, [searchPattern]),
+    { message: 'need org name, installationId, and a valid GH app to get manifests' }
+  )
+
+  await t.throwsAsync(
+    () => ghr.getAllManifestsForOrg({ name: 'flossbank' }, [searchPattern]),
+    { message: 'need org name, installationId, and a valid GH app to get manifests' }
+  )
+
+  ghr.app = null
+
+  await t.throwsAsync(
+    () => ghr.getAllManifestsForOrg({ name: 'flossbank', installationId: '123' }, [searchPattern]),
+    { message: 'need org name, installationId, and a valid GH app to get manifests' }
+  )
 })
 
 test.serial('getAllManifestsForOrg | success', async (t) => {
@@ -54,7 +96,7 @@ test.serial('getAllManifestsForOrg | success', async (t) => {
     patterns: ['package.json']
   }
 
-  const manifests = await ghr.getAllManifestsForOrg('flossbank', [searchPattern], 'token')
+  const manifests = await ghr.getAllManifestsForOrg({ name: 'flossbank', installationId: '123' }, [searchPattern])
 
   t.notThrows(() => scope.done())
 
