@@ -6,7 +6,8 @@ test.beforeEach((t) => {
   const db = {
     getNoCompList: sinon.stub().resolves(new Set()),
     getOrgAccessToken: sinon.stub().resolves({ name: 'flossbank', accessToken: 'asdf' }),
-    distributeOrgDonation: sinon.stub()
+    distributeOrgDonation: sinon.stub(),
+    createOrganizationOssUsageSnapshot: sinon.stub()
   }
   const dynamo = {
     lockOrg: sinon.stub().resolves({ success: true }),
@@ -116,6 +117,11 @@ test('process | success', async (t) => {
     registry: 'idk',
     organizationId: 'test-org-id'
   })
+  t.true(services.db.createOrganizationOssUsageSnapshot.calledWith({
+    organizationId: 'test-org-id',
+    totalDependencies: 4,
+    topLevelDependencies: 4
+  }))
   t.true(services.dynamo.unlockOrg.calledWith({ organizationId: 'test-org-id' }))
 })
 
