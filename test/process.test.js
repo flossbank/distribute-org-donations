@@ -5,8 +5,10 @@ const Process = require('../lib/process')
 test.beforeEach((t) => {
   const db = {
     getNoCompList: sinon.stub().resolves(new Set()),
-    getOrg: sinon.stub().resolves({ name: 'flossbank', accessToken: 'asdf' }),
-    distributeOrgDonation: sinon.stub()
+    getOrgAccessToken: sinon.stub().resolves({ name: 'flossbank', accessToken: 'asdf' }),
+    distributeOrgDonation: sinon.stub(),
+    createOrganizationOssUsageSnapshot: sinon.stub(),
+    getOrg: sinon.stub().resolves({ name: 'flossbank', accessToken: 'asdf' })
   }
   const dynamo = {
     lockOrg: sinon.stub().resolves({ success: true }),
@@ -116,6 +118,11 @@ test('process | success', async (t) => {
     registry: 'idk',
     organizationId: 'test-org-id'
   })
+  t.true(services.db.createOrganizationOssUsageSnapshot.calledWith({
+    organizationId: 'test-org-id',
+    totalDependencies: 4,
+    topLevelDependencies: 4
+  }))
   t.true(services.dynamo.unlockOrg.calledWith({ organizationId: 'test-org-id' }))
 })
 
