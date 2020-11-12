@@ -1,6 +1,6 @@
 const test = require('ava')
 const sinon = require('sinon')
-const { MongoClient } = require('mongodb')
+const { MongoClient, ObjectId } = require('mongodb')
 const Mongo = require('../lib/mongo')
 
 test.before(() => {
@@ -22,6 +22,7 @@ test.beforeEach((t) => {
 
   t.context.mongo.db = {
     collection: sinon.stub().returns({
+      updateOne: sinon.stub(),
       initializeUnorderedBulkOp: sinon.stub().returns({
         find: sinon.stub().returns({
           upsert: sinon.stub().returns({
@@ -120,6 +121,24 @@ test('bail on empty package weights map', async (t) => {
   })
   // Should not call bulk op
   t.false(t.context.mongo.db.collection().initializeUnorderedBulkOp().find().upsert().updateOne.called)
+})
+
+test('snapshot', async (t) => {
+  const { mongo, organizationId } = t.context
+
+  await mongo.createOrganizationOssUsageSnapshot({
+    organizationId,
+    totalDependencies: 100,
+    topLevelDependencies: 1200
+  })
+
+  t.deepEqual(mongo.db.collection().updateOne.lastCall.args, [{
+    _id: ObjectId(organizationId)
+  }, {
+    $push: {
+      snapshots: { timestamp: Date.now(), totalDependencies: 100, topLevelDependencies: 1200 }
+    }
+  }])
 })
 
 test('distribute org donation | success', async (t) => {
