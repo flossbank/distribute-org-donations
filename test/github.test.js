@@ -19,6 +19,26 @@ test.afterEach((t) => {
   nock.cleanAll()
 })
 
+test('should filter out archived repos when retrieving org repos', async (t) => {
+  const { ghr } = t.context
+
+  nock('https://api.github.com')
+    .get('/orgs/flossbank/repos')
+    .reply(200, [
+      { full_name: 'flossbank/cli', name: 'cli', owner: { login: 'flossbank' }, archived: false },
+      { full_name: 'flossbank/splash', name: 'splash', owner: { login: 'flossbank' }, archived: false },
+      { full_name: 'flossbank/ad_portal', name: 'ad_portal', owner: { login: 'flossbank' }, archived: true }
+    ])
+
+  const repos = await ghr.getOrgRepos('flossbank', 'fake-token')
+  t.deepEqual(repos,
+    [
+      { full_name: 'flossbank/cli', name: 'cli', owner: { login: 'flossbank' }, archived: false },
+      { full_name: 'flossbank/splash', name: 'splash', owner: { login: 'flossbank' }, archived: false }
+    ]
+  )
+})
+
 test.serial('init', async (t) => {
   const config = {
     getGithubAppConfig: sinon.stub().resolves({ id: 'abc', privateKey: 'def' })
