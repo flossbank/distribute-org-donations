@@ -5,6 +5,12 @@ Parameters:
   MongoUri:
     Type: AWS::SSM::Parameter::Value<String>
     Default: '/api/db/mongo_uri'
+  GitHubAppPEM:
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: '/api/github/app_pem'
+  GitHubAppID:
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: '/api/github/app_id'
 Resources:
   DistributeOrgDonationsDeadLetterQueue:
     Type: AWS::SQS::Queue
@@ -41,3 +47,5 @@ Resources:
       Environment:
         Variables:
           MONGO_URI: !Ref MongoUri
+          GITHUB_APP_PEM: !Ref GitHubAppPEM
+          GITHUB_APP_ID: !Ref GitHubAppID

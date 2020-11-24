@@ -1,6 +1,6 @@
 const test = require('ava')
 const sinon = require('sinon')
-const { MongoClient } = require('mongodb')
+const { MongoClient, ObjectId } = require('mongodb')
 const Mongo = require('../lib/mongo')
 
 test.before(() => {
@@ -22,6 +22,7 @@ test.beforeEach((t) => {
 
   t.context.mongo.db = {
     collection: sinon.stub().returns({
+      updateOne: sinon.stub(),
       initializeUnorderedBulkOp: sinon.stub().returns({
         find: sinon.stub().returns({
           upsert: sinon.stub().returns({
@@ -52,56 +53,35 @@ test('close', async (t) => {
   t.true(t.context.mongo.mongoClient.close.calledOnce)
 })
 
-test('get org access token', async (t) => {
+test('get org', async (t) => {
   const { mongo } = t.context
 
-  const user = { codeHost: { GitHub: { accessToken: 'asdf' } } }
   const organization = {
     name: 'flossbank',
-    host: 'GitHub',
-    users: [{ userId: 'bbbbbbbbbbbb', role: 'WRITE' }]
+    installationId: 'abc',
+    host: 'GitHub'
   }
   mongo.db = {
     collection: (col) => ({
-      findOne: sinon.stub().resolves(col === 'users' ? user : organization)
-    })
-  }
-
-  const res = await mongo.getOrgAccessToken({ organizationId: 'aaaaaaaaaaaa' })
-  t.deepEqual(res, { name: 'flossbank', host: 'GitHub', accessToken: 'asdf' })
-})
-
-test('get org access token | no users', async (t) => {
-  const { mongo } = t.context
-
-  const organization = {
-    name: 'flossbank',
-    host: 'GitHub',
-    users: []
-  }
-  mongo.db = {
-    collection: () => ({
       findOne: sinon.stub().resolves(organization)
     })
   }
 
-  await t.throwsAsync(() => mongo.getOrgAccessToken({ organizationId: 'aaaaaaaaaaaa' }))
+  const res = await mongo.getOrg({ organizationId: 'aaaaaaaaaaaa' })
+  t.deepEqual(res, { name: 'flossbank', host: 'GitHub', installationId: 'abc' })
 })
 
-test('get org access token | user not found', async (t) => {
+test('get org | no org', async (t) => {
   const { mongo } = t.context
 
-  const organization = {
-    name: 'flossbank',
-    host: 'GitHub',
-    users: [{ userId: 'aaaaaaaaaaaa', role: 'WRITE' }]
-  }
   mongo.db = {
     collection: (col) => ({
-      findOne: sinon.stub().resolves(col === 'users' ? null : organization)
+      findOne: sinon.stub().resolves()
     })
   }
-  await t.throwsAsync(() => mongo.getOrgAccessToken({ organizationId: 'aaaaaaaaaaaa' }))
+
+  const res = await mongo.getOrg({ organizationId: 'aaaaaaaaaaaa' })
+  t.is(res, undefined)
 })
 
 test('get no comp list | supported', async (t) => {
@@ -141,6 +121,24 @@ test('bail on empty package weights map', async (t) => {
   })
   // Should not call bulk op
   t.false(t.context.mongo.db.collection().initializeUnorderedBulkOp().find().upsert().updateOne.called)
+})
+
+test('snapshot', async (t) => {
+  const { mongo, organizationId } = t.context
+
+  await mongo.createOrganizationOssUsageSnapshot({
+    organizationId,
+    totalDependencies: 100,
+    topLevelDependencies: 1200
+  })
+
+  t.deepEqual(mongo.db.collection().updateOne.lastCall.args, [{
+    _id: ObjectId(organizationId)
+  }, {
+    $push: {
+      snapshots: { timestamp: Date.now(), totalDependencies: 100, topLevelDependencies: 1200 }
+    }
+  }])
 })
 
 test('distribute org donation | success', async (t) => {
