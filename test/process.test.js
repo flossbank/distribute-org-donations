@@ -73,6 +73,16 @@ test.beforeEach((t) => {
   t.context.undefinedOrgTestBody = {
     body: JSON.stringify(t.context.undefinedOrgRecordBody)
   }
+
+  t.context.zeroAmountRecordBody = {
+    amount: 0,
+    timestamp: 1234,
+    organizationId: 'test-org-id',
+    description: 'testing donation'
+  }
+  t.context.zeroAmountRecord = {
+    body: JSON.stringify(t.context.zeroAmountRecordBody)
+  }
 })
 
 test('process | success', async (t) => {
@@ -118,6 +128,24 @@ test('process | success', async (t) => {
     registry: 'idk',
     organizationId: 'test-org-id'
   })
+  t.true(services.db.createOrganizationOssUsageSnapshot.calledWith({
+    organizationId: 'test-org-id',
+    totalDependencies: 4,
+    topLevelDependencies: 4
+  }))
+  t.true(services.dynamo.unlockOrg.calledWith({ organizationId: 'test-org-id' }))
+})
+
+test('process | success - amount of 0', async (t) => {
+  const { services, zeroAmountRecord } = t.context
+  const res = await Process.process({
+    record: zeroAmountRecord,
+    ...services
+  })
+
+  t.deepEqual(res, { success: true })
+
+  t.true(services.db.distributeOrgDonation.notCalled)
   t.true(services.db.createOrganizationOssUsageSnapshot.calledWith({
     organizationId: 'test-org-id',
     totalDependencies: 4,
