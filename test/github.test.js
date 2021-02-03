@@ -139,7 +139,7 @@ test.serial('getAllManifestsForOrg | success', async (t) => {
   ])
 })
 
-test.serial('getManifestsForOrg | bad github response to search', async (t) => {
+test.serial('getAllManifestsForOrg | bad github response to search', async (t) => {
   const { ghr } = t.context
 
   const scope = nock('https://api.github.com')
@@ -148,18 +148,22 @@ test.serial('getManifestsForOrg | bad github response to search', async (t) => {
     .get('/search/code').query(true)
     .reply(200, {})
 
-  const searchPattern = {
+  const searchPattern = [{
     registry: 'npm',
     language: 'javascript',
     patterns: ['package.json']
+  }]
+  const org = {
+    name: 'flossbank',
+    installationId: '1234567'
   }
-  const manifests = await ghr.getManifestsForOrg('flossbank', searchPattern, 'token')
+  const manifests = await ghr.getAllManifestsForOrg(org, searchPattern, 'token')
   t.notThrows(() => scope.done())
 
   t.deepEqual(manifests, [])
 })
 
-test.serial('getManifestsForOrg | caches', async (t) => {
+test.serial('getAllManifestsForOrg | caches', async (t) => {
   const { ghr } = t.context
 
   const scope = nock('https://api.github.com')
@@ -172,19 +176,23 @@ test.serial('getManifestsForOrg | caches', async (t) => {
     .get('/repos/flossbank/cli/contents/package.json')
     .reply(200, { content: Buffer.from('cli_package.json').toString('base64') })
 
-  const searchPattern = {
+  const searchPattern = [{
     registry: 'npm',
     language: 'javascript',
     patterns: ['package.json']
+  }]
+  const org = {
+    name: 'flossbank',
+    installationId: '1234567'
   }
-  const manifestsFirst = await ghr.getManifestsForOrg('flossbank', searchPattern, 'token')
+  const manifestsFirst = await ghr.getAllManifestsForOrg(org, searchPattern, 'token')
   t.notThrows(() => scope.done())
 
   // only call made will be to download the package.json; the repos and search results are cached
   scope.get('/repos/flossbank/cli/contents/package.json')
     .reply(200, { content: Buffer.from('cli_package.json').toString('base64') })
 
-  const manifestsSecond = await ghr.getManifestsForOrg('flossbank', searchPattern, 'token')
+  const manifestsSecond = await ghr.getAllManifestsForOrg(org, searchPattern, 'token')
   t.notThrows(() => scope.done())
   t.deepEqual(manifestsFirst, manifestsSecond)
 })
