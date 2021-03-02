@@ -2,9 +2,11 @@ const test = require('ava')
 const sinon = require('sinon')
 const { MongoClient, ObjectId } = require('mongodb')
 const Mongo = require('../lib/mongo')
+const ULID = require('ulid')
 
 test.before(() => {
   sinon.stub(Date, 'now').returns(1234)
+  sinon.stub(ULID, 'ulid').returns('bbbbbbbbbbbb')
 })
 
 test.beforeEach((t) => {
@@ -160,7 +162,8 @@ test('distribute org donation | success', async (t) => {
       donationRevenue: {
         organizationId,
         timestamp: 1234,
-        amount: packageWeightsMap.get('standard') * donationAmount
+        amount: packageWeightsMap.get('standard') * donationAmount,
+        id: 'bbbbbbbbbbbb'
       }
     }
   }))
@@ -169,7 +172,8 @@ test('distribute org donation | success', async (t) => {
       donationRevenue: {
         organizationId: t.context.organizationId,
         timestamp: 1234,
-        amount: packageWeightsMap.get('yttrium-server') * donationAmount
+        amount: packageWeightsMap.get('yttrium-server') * donationAmount,
+        id: 'bbbbbbbbbbbb'
       }
     }
   }))
@@ -178,7 +182,8 @@ test('distribute org donation | success', async (t) => {
       donationRevenue: {
         organizationId: t.context.organizationId,
         timestamp: 1234,
-        amount: packageWeightsMap.get('js-deep-equals') * donationAmount
+        amount: packageWeightsMap.get('js-deep-equals') * donationAmount,
+        id: 'bbbbbbbbbbbb'
       }
     }
   }))
