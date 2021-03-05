@@ -91,7 +91,8 @@ test.serial('getAllManifestsForOrg | success', async (t) => {
       items: [
         { name: 'package.json', path: 'package.json' },
         { name: 'package-lock.json', path: 'package-lock.json' },
-        { name: 'package.json', path: 'ci/tests/package.json' }
+        { name: 'package.json', path: 'ci/tests/package.json' },
+        { name: 'package.json', path: 'ci/node_modules/minimist/package.json' }
       ]
     }, { // these headers trigger the rate-limiter-avoiding logic
       'x-ratelimit-remaining': 0,
