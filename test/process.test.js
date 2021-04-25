@@ -118,6 +118,7 @@ test('process | success', async (t) => {
     donationAmount: Math.floor(expectedDonationAmount * (3 / 4)), // donation for 3 JavaScript deps out of 4 total deps found
     packageWeightsMap: new Map([['standard', 0.5], ['js-deep-equals', 0.2], ['yttrium-server', 0.3]]),
     language: 'javascript',
+    description: 'testing donation',
     registry: 'npm',
     organizationId: 'test-org-id'
   })
@@ -126,6 +127,7 @@ test('process | success', async (t) => {
     packageWeightsMap: new Map([['some-php-dep', 1]]),
     language: 'php',
     registry: 'idk',
+    description: 'testing donation',
     organizationId: 'test-org-id'
   })
   t.true(services.db.createOrganizationOssUsageSnapshot.calledWith({

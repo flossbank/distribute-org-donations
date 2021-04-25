@@ -148,8 +148,10 @@ test('distribute org donation | success', async (t) => {
   const donationAmount = 1000000 // 10 bucks in mc
   const language = 'javascript'
   const registry = 'npm'
+  const description = 'Invoice 01'
   await mongo.distributeOrgDonation({
     organizationId,
+    description,
     packageWeightsMap,
     language,
     registry,
@@ -160,6 +162,7 @@ test('distribute org donation | success', async (t) => {
   t.true(t.context.mongo.db.collection().initializeUnorderedBulkOp().find().upsert().updateOne.calledWith({
     $push: {
       donationRevenue: {
+        description,
         organizationId,
         timestamp: 1234,
         amount: packageWeightsMap.get('standard') * donationAmount,
@@ -170,6 +173,7 @@ test('distribute org donation | success', async (t) => {
   t.true(t.context.mongo.db.collection().initializeUnorderedBulkOp().find().upsert().updateOne.calledWith({
     $push: {
       donationRevenue: {
+        description,
         organizationId: t.context.organizationId,
         timestamp: 1234,
         amount: packageWeightsMap.get('yttrium-server') * donationAmount,
@@ -180,6 +184,7 @@ test('distribute org donation | success', async (t) => {
   t.true(t.context.mongo.db.collection().initializeUnorderedBulkOp().find().upsert().updateOne.calledWith({
     $push: {
       donationRevenue: {
+        description,
         organizationId: t.context.organizationId,
         timestamp: 1234,
         amount: packageWeightsMap.get('js-deep-equals') * donationAmount,
