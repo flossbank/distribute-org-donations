@@ -1,7 +1,9 @@
 const test = require('ava')
 const sinon = require('sinon')
-const { MongoClient, ObjectId } = require('mongodb')
+const { MongoMemoryServer } = require('mongodb-memory-server')
+const { ObjectId } = require('mongodb')
 const Mongo = require('../lib/mongo')
+const Config = require('../lib/config')
 const ULID = require('ulid')
 
 test.before(() => {
@@ -9,8 +11,123 @@ test.before(() => {
   sinon.stub(ULID, 'ulid').returns('bbbbbbbbbbbb')
 })
 
-test.beforeEach((t) => {
-  t.context.mongo = new Mongo({
+test.before(async (t) => {
+  const config = new Config({
+    kms: {}
+  })
+
+  const mongo = new MongoMemoryServer()
+  const mongoUri = await mongo.getUri()
+
+  config.decrypt = sinon.stub().returns(mongoUri)
+  t.context.mongo = new Mongo({ config, log: { info: sinon.stub() } })
+  await t.context.mongo.connect()
+
+  const { insertedId: defaultOrgId } = await t.context.mongo.db.collection('organizations').insertOne({
+    name: 'azalias',
+    installationId: 'abc',
+    host: 'GitHub'
+  })
+
+  const { insertedId: packageId1 } = await t.context.mongo.db.collection('packages').insertOne({
+    name: 'rodadendrins',
+    language: 'javascript',
+    registry: 'npm'
+  })
+  t.context.packageId1 = packageId1.toString()
+  const { insertedId: packageId2 } = await t.context.mongo.db.collection('packages').insertOne({
+    name: 'tulips',
+    language: 'javascript',
+    registry: 'npm'
+  })
+  t.context.packageId2 = packageId2.toString()
+  const { insertedId: packageId3 } = await t.context.mongo.db.collection('packages').insertOne({
+    name: 'roses',
+    language: 'javascript',
+    registry: 'npm'
+  })
+  t.context.packageId3 = packageId3.toString()
+
+  t.context.organizationId = defaultOrgId.toString()
+  t.context.packageWeightsMap = new Map([['rodadendrins', 0.05], ['tulips', 0.75], ['roses', 0.2]])
+})
+
+test.after(async (t) => {
+  await t.context.mongo.close()
+})
+
+test('get org', async (t) => {
+  const { mongo } = t.context
+  const { insertedId: orgId1 } = await mongo.db.collection('organizations').insertOne({
+    name: 'flossbank',
+    installationId: 'abc',
+    host: 'GitHub'
+  })
+
+  const res = await mongo.getOrg({ organizationId: orgId1.toString() })
+  t.deepEqual(res, { name: 'flossbank', host: 'GitHub', installationId: 'abc' })
+})
+
+test('get org | no org', async (t) => {
+  const { mongo } = t.context
+  const res = await mongo.getOrg({ organizationId: 'aaaaaaaaaaaa' })
+  t.is(res, null)
+})
+
+test.only('get no comp list | supported', async (t) => {
+  const { mongo } = t.context
+
+  await mongo.db.collection('meta').insertOne({
+    language: 'javascript',
+    registry: 'npm',
+    name: 'noCompList',
+    list: ['react']
+  })
+
+  const res = await mongo.getNoCompList({ language: 'javascript', registry: 'npm' })
+  t.deepEqual(res, new Set(['react']))
+})
+
+test('get no comp list | unsupported', async (t) => {
+  const { mongo } = t.context
+
+  const res = await mongo.getNoCompList({ language: 'python', registry: 'pypi' })
+  t.deepEqual(res, new Set())
+})
+
+test('increment org total amount donated from undefined', async (t) => {
+  const { mongo } = t.context
+
+  const { insertedId: orgId1 } = await mongo.db.collection('organizations').insertOne({
+    name: 'gatorade',
+    installationId: 'abc',
+    host: 'GitHub'
+  })
+
+  await mongo.updateDonatedAmount({ organizationId: orgId1.toString(), amount: 1000 })
+
+  const updatedOrg = mongo.getOrg({ organizationId: orgId1.toString() })
+  t.deepEqual(updatedOrg.totalDonated, 1000)
+})
+
+test('increment org total amount donated from existing value', async (t) => {
+  const { mongo } = t.context
+
+  const { insertedId: orgId1 } = await mongo.db.collection('organizations').insertOne({
+    name: 'powerade',
+    installationId: 'abc',
+    host: 'GitHub',
+    totalDonated: 1000
+  })
+
+  await mongo.updateDonatedAmount({ organizationId: orgId1.toString(), amount: 1000 })
+
+  const updatedOrg = mongo.getOrg({ organizationId: orgId1.toString() })
+  t.deepEqual(updatedOrg.totalDonated, 2000)
+})
+
+test('bail on empty package weights map', async (t) => {
+  const temporaryMongo = new Mongo({
     config: {
       getMongoUri: async () => 'mongodb+srv://0.0.0.0/test'
     },
@@ -19,10 +136,7 @@ test.beforeEach((t) => {
     }
   })
 
-  t.context.organizationId = 'aaaaaaaaaaaa'
-  t.context.packageWeightsMap = new Map([['standard', 0.05], ['js-deep-equals', 0.75], ['yttrium-server', 0.2]])
-
-  t.context.mongo.db = {
+  temporaryMongo.db = {
     collection: sinon.stub().returns({
       updateOne: sinon.stub(),
       initializeUnorderedBulkOp: sinon.stub().returns({
@@ -35,86 +149,9 @@ test.beforeEach((t) => {
       })
     })
   }
-})
 
-test('connect', async (t) => {
-  sinon.stub(MongoClient.prototype, 'connect')
-  sinon.stub(MongoClient.prototype, 'db')
-
-  await t.context.mongo.connect()
-  t.true(MongoClient.prototype.connect.calledOnce)
-
-  MongoClient.prototype.connect.restore()
-  MongoClient.prototype.db.restore()
-})
-
-test('close', async (t) => {
-  await t.context.mongo.close()
-  t.context.mongo.mongoClient = { close: sinon.stub() }
-  await t.context.mongo.close()
-  t.true(t.context.mongo.mongoClient.close.calledOnce)
-})
-
-test('get org', async (t) => {
-  const { mongo } = t.context
-
-  const organization = {
-    name: 'flossbank',
-    installationId: 'abc',
-    host: 'GitHub'
-  }
-  mongo.db = {
-    collection: (col) => ({
-      findOne: sinon.stub().resolves(organization)
-    })
-  }
-
-  const res = await mongo.getOrg({ organizationId: 'aaaaaaaaaaaa' })
-  t.deepEqual(res, { name: 'flossbank', host: 'GitHub', installationId: 'abc' })
-})
-
-test('get org | no org', async (t) => {
-  const { mongo } = t.context
-
-  mongo.db = {
-    collection: (col) => ({
-      findOne: sinon.stub().resolves()
-    })
-  }
-
-  const res = await mongo.getOrg({ organizationId: 'aaaaaaaaaaaa' })
-  t.is(res, undefined)
-})
-
-test('get no comp list | supported', async (t) => {
-  const { mongo } = t.context
-
-  mongo.db = {
-    collection: () => ({
-      findOne: sinon.stub().resolves({ language: 'javascript', registry: 'npm', list: ['react'] })
-    })
-  }
-
-  const res = await mongo.getNoCompList({ language: 'javascript', registry: 'npm' })
-  t.deepEqual(res, new Set(['react']))
-})
-
-test('get no comp list | unsupported', async (t) => {
-  const { mongo } = t.context
-
-  mongo.db = {
-    collection: () => ({
-      findOne: sinon.stub().resolves()
-    })
-  }
-
-  const res = await mongo.getNoCompList({ language: 'javascript', registry: 'npm' })
-  t.deepEqual(res, new Set())
-})
-
-test('bail on empty package weights map', async (t) => {
   const donationAmount = 500000 // 5 bucks in mc
-  await t.context.mongo.distributeOrgDonation({
+  await temporaryMongo.distributeOrgDonation({
     organizationId: t.context.organizationId,
     packageWeightsMap: new Map(),
     registry: 'npm',
@@ -134,18 +171,16 @@ test('snapshot', async (t) => {
     topLevelDependencies: 1200
   })
 
-  t.deepEqual(mongo.db.collection().updateOne.lastCall.args, [{
-    _id: ObjectId(organizationId)
-  }, {
-    $push: {
-      snapshots: { timestamp: Date.now(), totalDependencies: 100, topLevelDependencies: 1200 }
-    }
-  }])
+  const updatedOrg = await mongo.db.collection('organizations').findOne({ _id: ObjectId(organizationId) })
+
+  t.deepEqual(updatedOrg.snapshots, [
+    { timestamp: Date.now(), totalDependencies: 100, topLevelDependencies: 1200 }
+  ])
 })
 
 test('distribute org donation | success', async (t) => {
   const { packageWeightsMap, organizationId, mongo } = t.context
-  const donationAmount = 1000000 // 10 bucks in mc
+  const donationAmount = 1000000 // 10 bucks in millicents
   const language = 'javascript'
   const registry = 'npm'
   const description = 'Invoice 01'
@@ -159,37 +194,29 @@ test('distribute org donation | success', async (t) => {
   })
 
   // 3 pushes for 3 diff packages in our packageWeightsMap
-  t.true(t.context.mongo.db.collection().initializeUnorderedBulkOp().find().upsert().updateOne.calledWith({
-    $push: {
-      donationRevenue: {
-        description,
-        organizationId,
-        timestamp: 1234,
-        amount: packageWeightsMap.get('standard') * donationAmount,
-        id: 'bbbbbbbbbbbb'
-      }
-    }
-  }))
-  t.true(t.context.mongo.db.collection().initializeUnorderedBulkOp().find().upsert().updateOne.calledWith({
-    $push: {
-      donationRevenue: {
-        description,
-        organizationId: t.context.organizationId,
-        timestamp: 1234,
-        amount: packageWeightsMap.get('yttrium-server') * donationAmount,
-        id: 'bbbbbbbbbbbb'
-      }
-    }
-  }))
-  t.true(t.context.mongo.db.collection().initializeUnorderedBulkOp().find().upsert().updateOne.calledWith({
-    $push: {
-      donationRevenue: {
-        description,
-        organizationId: t.context.organizationId,
-        timestamp: 1234,
-        amount: packageWeightsMap.get('js-deep-equals') * donationAmount,
-        id: 'bbbbbbbbbbbb'
-      }
-    }
-  }))
+  const rodadendrinsPkg = await mongo.db.collection('packages').findOne({ _id: ObjectId(t.context.packageId1) })
+  const tulipsPkg = await mongo.db.collection('packages').findOne({ _id: ObjectId(t.context.packageId2) })
+  const rosesPkg = await mongo.db.collection('packages').findOne({ _id: ObjectId(t.context.packageId3) })
+
+  t.deepEqual(rodadendrinsPkg.donationRevenue, [{
+    description,
+    organizationId,
+    timestamp: 1234,
+    amount: packageWeightsMap.get('rodadendrins') * donationAmount,
+    id: 'bbbbbbbbbbbb'
+  }])
+  t.deepEqual(tulipsPkg.donationRevenue, [{
+    description,
+    organizationId,
+    timestamp: 1234,
+    amount: packageWeightsMap.get('tulips') * donationAmount,
+    id: 'bbbbbbbbbbbb'
+  }])
+  t.deepEqual(rosesPkg.donationRevenue, [{
+    description,
+    organizationId,
+    timestamp: 1234,
+    amount: packageWeightsMap.get('roses') * donationAmount,
+    id: 'bbbbbbbbbbbb'
+  }])
 })
