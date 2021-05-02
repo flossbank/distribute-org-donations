@@ -7,6 +7,7 @@ test.beforeEach((t) => {
     getNoCompList: sinon.stub().resolves(new Set()),
     getOrgAccessToken: sinon.stub().resolves({ name: 'flossbank', accessToken: 'asdf' }),
     distributeOrgDonation: sinon.stub(),
+    updateDonatedAmount: sinon.stub(),
     createOrganizationOssUsageSnapshot: sinon.stub(),
     getOrg: sinon.stub().resolves({ name: 'flossbank', accessToken: 'asdf' })
   }
@@ -135,6 +136,7 @@ test('process | success', async (t) => {
     totalDependencies: 4,
     topLevelDependencies: 4
   }))
+  t.true(services.db.updateDonatedAmount.calledWith({ organizationId: 'test-org-id', amount: recordBody.amount * 1000 }))
   t.true(services.dynamo.unlockOrg.calledWith({ organizationId: 'test-org-id' }))
 })
 
