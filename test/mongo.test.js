@@ -74,7 +74,7 @@ test('get org | no org', async (t) => {
   t.is(res, null)
 })
 
-test.only('get no comp list | supported', async (t) => {
+test('get no comp list | supported', async (t) => {
   const { mongo } = t.context
 
   await mongo.db.collection('meta').insertOne({
@@ -106,7 +106,7 @@ test('increment org total amount donated from undefined', async (t) => {
 
   await mongo.updateDonatedAmount({ organizationId: orgId1.toString(), amount: 1000 })
 
-  const updatedOrg = mongo.getOrg({ organizationId: orgId1.toString() })
+  const updatedOrg = await mongo.db.collection('organizations').findOne({ _id: orgId1 })
   t.deepEqual(updatedOrg.totalDonated, 1000)
 })
 
@@ -122,7 +122,7 @@ test('increment org total amount donated from existing value', async (t) => {
 
   await mongo.updateDonatedAmount({ organizationId: orgId1.toString(), amount: 1000 })
 
-  const updatedOrg = mongo.getOrg({ organizationId: orgId1.toString() })
+  const updatedOrg = await mongo.db.collection('organizations').findOne({ _id: orgId1 })
   t.deepEqual(updatedOrg.totalDonated, 2000)
 })
 
@@ -159,7 +159,7 @@ test('bail on empty package weights map', async (t) => {
     donationAmount
   })
   // Should not call bulk op
-  t.false(t.context.mongo.db.collection().initializeUnorderedBulkOp().find().upsert().updateOne.called)
+  t.false(temporaryMongo.db.collection().initializeUnorderedBulkOp().find().upsert().updateOne.called)
 })
 
 test('snapshot', async (t) => {
