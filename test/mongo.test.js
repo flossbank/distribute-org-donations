@@ -56,6 +56,34 @@ test.after(async (t) => {
   await t.context.mongo.close()
 })
 
+test('close', async (t) => {
+  const mongo = new Mongo({})
+  await mongo.close() // nothing to close
+
+  mongo.mongoClient = { close: sinon.stub() }
+  await mongo.close()
+
+  t.true(mongo.mongoClient.close.calledOnce)
+})
+
+test('get package', async (t) => {
+  const { mongo, packageId2 } = t.context
+
+  const pkg = await mongo.getPackage({ packageId: packageId2 })
+  t.deepEqual(pkg, {
+    name: 'tulips',
+    language: 'javascript',
+    registry: 'npm'
+  })
+})
+
+test('get package | no pkg', async (t) => {
+  const { mongo } = t.context
+
+  const pkg = await mongo.getPackage({ packageId: 'aaaaaaaaaaaa' })
+  t.is(pkg, null)
+})
+
 test('get org', async (t) => {
   const { mongo } = t.context
   const { insertedId: orgId1 } = await mongo.db.collection('organizations').insertOne({
