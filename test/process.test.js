@@ -9,13 +9,15 @@ test.beforeEach((t) => {
     distributeOrgDonation: sinon.stub(),
     updateDonatedAmount: sinon.stub(),
     createOrganizationOssUsageSnapshot: sinon.stub(),
-    getOrg: sinon.stub().resolves({ name: 'flossbank', accessToken: 'asdf' })
+    getOrg: sinon.stub().resolves({ name: 'flossbank', accessToken: 'asdf' }),
+    getPackage: sinon.stub().resolves({ name: 'standard', language: 'javascript', registry: 'npm' })
   }
   const dynamo = {
     lockOrg: sinon.stub().resolves({ success: true }),
     unlockOrg: sinon.stub().resolves({ success: true })
   }
   const resolver = {
+    buildLatestSpec: sinon.stub().returns('standard@latest'),
     getSupportedManifestPatterns: sinon.stub().resolves(['package.json']),
     extractDependenciesFromManifests: sinon.stub().returns([{
       language: 'javascript',
@@ -84,6 +86,17 @@ test.beforeEach((t) => {
   t.context.zeroAmountRecord = {
     body: JSON.stringify(t.context.zeroAmountRecordBody)
   }
+
+  t.context.targetPackageIdRecordBody = {
+    amount: 1000,
+    timestamp: 1234,
+    organizationId: 'test-org-id',
+    targetPackageId: 'aaaaaaaaaaaa',
+    description: 'testing donation'
+  }
+  t.context.targetPackageIdRecord = {
+    body: JSON.stringify(t.context.targetPackageIdRecordBody)
+  }
 })
 
 test('process | success', async (t) => {
@@ -138,6 +151,117 @@ test('process | success', async (t) => {
   }))
   t.true(services.db.updateDonatedAmount.calledWith({ organizationId: 'test-org-id', amount: recordBody.amount * 1000 }))
   t.true(services.dynamo.unlockOrg.calledWith({ organizationId: 'test-org-id' }))
+})
+
+test('process | targetPackageId | success', async (t) => {
+  const { services, targetPackageIdRecord } = t.context
+  const res = await Process.process({
+    record: targetPackageIdRecord,
+    ...services
+  })
+
+  t.deepEqual(res, { success: true })
+  t.true(services.dynamo.lockOrg.calledWith({ organizationId: 'test-org-id' }))
+  t.true(services.resolver.getSupportedManifestPatterns.notCalled)
+  t.true(services.retriever.getAllManifestsForOrg.notCalled)
+  t.true(services.resolver.extractDependenciesFromManifests.notCalled)
+
+  t.true(services.resolver.buildLatestSpec.calledWith('standard', { language: 'javascript', registry: 'npm' }))
+
+  t.true(services.db.getNoCompList.calledWith({ language: 'javascript', registry: 'npm' }))
+  t.deepEqual(services.resolver.computePackageWeight.lastCall.args, [{
+    language: 'javascript',
+    noCompList: new Set(),
+    registry: 'npm',
+    topLevelPackages: ['standard@latest']
+  }])
+  t.true(services.db.distributeOrgDonation.calledOnce)
+
+  t.true(services.db.createOrganizationOssUsageSnapshot.notCalled)
+
+  t.true(services.db.updateDonatedAmount.calledOnce)
+  t.true(services.dynamo.unlockOrg.calledWith({ organizationId: 'test-org-id' }))
+})
+
+test('process | targetPackageId | redistribute | success', async (t) => {
+  const { services, targetPackageIdRecordBody } = t.context
+
+  services.resolver.computePackageWeight.reset()
+  services.resolver.computePackageWeight.resolves(new Map([['standard', 1]]))
+
+  const res = await Process.process({
+    record: { body: JSON.stringify({ ...targetPackageIdRecordBody, redistributedDonation: true }) },
+    ...services
+  })
+  const expectedDonationAmount = targetPackageIdRecordBody.amount * 1000
+
+  t.deepEqual(res, { success: true })
+  t.true(services.dynamo.lockOrg.calledWith({ organizationId: 'test-org-id' }))
+  t.true(services.resolver.getSupportedManifestPatterns.notCalled)
+  t.true(services.retriever.getAllManifestsForOrg.notCalled)
+  t.true(services.resolver.extractDependenciesFromManifests.notCalled)
+
+  t.true(services.resolver.buildLatestSpec.calledWith('standard', { language: 'javascript', registry: 'npm' }))
+
+  t.true(services.db.getNoCompList.calledWith({ language: 'javascript', registry: 'npm' }))
+  t.deepEqual(services.resolver.computePackageWeight.lastCall.args, [{
+    language: 'javascript',
+    noCompList: new Set(),
+    registry: 'npm',
+    topLevelPackages: ['standard@latest']
+  }])
+  t.deepEqual(services.db.distributeOrgDonation.lastCall.args, [{
+    donationAmount: expectedDonationAmount,
+    packageWeightsMap: await services.resolver.computePackageWeight(),
+    description: targetPackageIdRecordBody.description,
+    language: 'javascript',
+    registry: 'npm',
+    organizationId: targetPackageIdRecordBody.organizationId
+  }])
+
+  t.true(services.db.createOrganizationOssUsageSnapshot.notCalled)
+  t.true(services.db.updateDonatedAmount.notCalled)
+  t.true(services.dynamo.unlockOrg.calledWith({ organizationId: 'test-org-id' }))
+})
+
+test('process | targetPackageId | bad pkg id', async (t) => {
+  const { services, targetPackageIdRecord } = t.context
+  services.db.getPackage.resolves(undefined)
+
+  await t.throwsAsync(() => Process.process({
+    record: targetPackageIdRecord,
+    ...services
+  }), { message: 'targetPackageId not found in db: aaaaaaaaaaaa' })
+
+  services.db.getPackage.resolves({})
+  await t.throwsAsync(() => Process.process({
+    record: targetPackageIdRecord,
+    ...services
+  }), { message: 'missing properties on target package: undefined undefined undefined' })
+
+  services.db.getPackage.resolves({ name: 'papa' })
+  await t.throwsAsync(() => Process.process({
+    record: targetPackageIdRecord,
+    ...services
+  }), { message: 'missing properties on target package: papa undefined undefined' })
+
+  services.db.getPackage.resolves({ name: 'papa', language: 'johns' })
+  await t.throwsAsync(() => Process.process({
+    record: targetPackageIdRecord,
+    ...services
+  }), { message: 'missing properties on target package: papa johns undefined' })
+
+  t.true(services.dynamo.lockOrg.calledWith({ organizationId: 'test-org-id' }))
+  t.true(services.resolver.getSupportedManifestPatterns.notCalled)
+  t.true(services.retriever.getAllManifestsForOrg.notCalled)
+  t.true(services.resolver.extractDependenciesFromManifests.notCalled)
+  t.true(services.resolver.buildLatestSpec.notCalled)
+  t.true(services.db.getNoCompList.notCalled)
+  t.true(services.resolver.computePackageWeight.notCalled)
+  t.true(services.db.distributeOrgDonation.notCalled)
+  t.true(services.db.createOrganizationOssUsageSnapshot.notCalled)
+  t.true(services.db.updateDonatedAmount.notCalled)
+  t.true(services.dynamo.unlockOrg.notCalled)
 })
 
 test('process | success - amount of 0', async (t) => {
