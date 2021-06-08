@@ -59,7 +59,7 @@ test.beforeEach((t) => {
   }
 
   t.context.recordBody = {
-    amount: 1000,
+    amount: 1000000,
     timestamp: 1234,
     organizationId: 'test-org-id',
     description: 'testing donation'
@@ -68,7 +68,7 @@ test.beforeEach((t) => {
     body: JSON.stringify(t.context.recordBody)
   }
   t.context.undefinedOrgRecordBody = {
-    amount: 1000,
+    amount: 1000000,
     timestamp: 1234,
     organizationId: undefined,
     description: 'testing donation'
@@ -88,7 +88,7 @@ test.beforeEach((t) => {
   }
 
   t.context.targetPackageIdRecordBody = {
-    amount: 1000,
+    amount: 1000000,
     timestamp: 1234,
     organizationId: 'test-org-id',
     targetPackageId: 'aaaaaaaaaaaa',
@@ -105,7 +105,7 @@ test('process | success', async (t) => {
     record: testRecord,
     ...services
   })
-  const expectedDonationAmount = ((recordBody.amount * 0.96) - 30) * 1000
+  const expectedDonationAmount = (recordBody.amount * 0.96) - 30
 
   t.deepEqual(res, { success: true })
   t.true(services.dynamo.lockOrg.calledWith({ organizationId: 'test-org-id' }))
@@ -149,7 +149,7 @@ test('process | success', async (t) => {
     totalDependencies: 4,
     topLevelDependencies: 4
   }))
-  t.true(services.db.updateDonatedAmount.calledWith({ organizationId: 'test-org-id', amount: recordBody.amount * 1000 }))
+  t.true(services.db.updateDonatedAmount.calledWith({ organizationId: 'test-org-id', amount: recordBody.amount }))
   t.true(services.dynamo.unlockOrg.calledWith({ organizationId: 'test-org-id' }))
 })
 
@@ -193,7 +193,7 @@ test('process | targetPackageId | redistribute | success', async (t) => {
     record: { body: JSON.stringify({ ...targetPackageIdRecordBody, redistributedDonation: true }) },
     ...services
   })
-  const expectedDonationAmount = targetPackageIdRecordBody.amount * 1000
+  const expectedDonationAmount = targetPackageIdRecordBody.amount
 
   t.deepEqual(res, { success: true })
   t.true(services.dynamo.lockOrg.calledWith({ organizationId: 'test-org-id' }))
