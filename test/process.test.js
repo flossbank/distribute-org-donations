@@ -9,7 +9,8 @@ test.beforeEach((t) => {
     distributeOrgDonation: sinon.stub(),
     updateDonatedAmount: sinon.stub(),
     createOrganizationOssUsageSnapshot: sinon.stub(),
-    getOrg: sinon.stub().resolves({ name: 'flossbank', accessToken: 'asdf' }),
+    updateManuallyBilledRemainingDonation: sinon.stub(),
+    getOrg: sinon.stub().resolves({ name: 'flossbank', accessToken: 'asdf', billingInfo: {} }),
     getPackage: sinon.stub().resolves({ name: 'standard', language: 'javascript', registry: 'npm' })
   }
   const dynamo = {
@@ -67,6 +68,17 @@ test.beforeEach((t) => {
   t.context.testRecord = {
     body: JSON.stringify(t.context.recordBody)
   }
+
+  t.context.testRecordManuallyBilledBody = {
+    amount: 1000000,
+    timestamp: 1234,
+    organizationId: 'test-org-id',
+    description: undefined
+  }
+  t.context.testRecordManuallyBilled = {
+    body: JSON.stringify(t.context.recordBody)
+  }
+
   t.context.undefinedOrgRecordBody = {
     amount: 1000000,
     timestamp: 1234,
@@ -150,6 +162,20 @@ test('process | success', async (t) => {
     topLevelDependencies: 4
   }))
   t.true(services.db.updateDonatedAmount.calledWith({ organizationId: 'test-org-id', amount: recordBody.amount }))
+  t.true(services.dynamo.unlockOrg.calledWith({ organizationId: 'test-org-id' }))
+})
+
+test('process | success | manually billed org updates remaining donation amount', async (t) => {
+  const { services, testRecordManuallyBilled, testRecordManuallyBilledBody: recordBody } = t.context
+  services.db.getOrg.resolves({ name: 'flossbank', accessToken: 'asdf', remainingDonation: 1000000, billingInfo: { manuallyBilled: true } })
+  const res = await Process.process({
+    record: testRecordManuallyBilled,
+    ...services
+  })
+
+  t.deepEqual(res, { success: true })
+  t.true(services.db.updateDonatedAmount.calledWith({ organizationId: 'test-org-id', amount: recordBody.amount }))
+  t.true(services.db.updateManuallyBilledRemainingDonation.calledWith({ organizationId: 'test-org-id', remainingDonation: 0 }))
   t.true(services.dynamo.unlockOrg.calledWith({ organizationId: 'test-org-id' }))
 })
 
