@@ -165,7 +165,7 @@ test('process | success', async (t) => {
   t.true(services.dynamo.unlockOrg.calledWith({ organizationId: 'test-org-id' }))
 })
 
-test('process | success | manually billed org updates remaining donation amount', async (t) => {
+test('process | success | manually billed org updates remaining donation amount -> 0', async (t) => {
   const { services, testRecordManuallyBilled, testRecordManuallyBilledBody: recordBody } = t.context
   services.db.getOrg.resolves({ name: 'flossbank', accessToken: 'asdf', remainingDonation: 1000000, billingInfo: { manuallyBilled: true } })
   const res = await Process.process({
@@ -176,6 +176,20 @@ test('process | success | manually billed org updates remaining donation amount'
   t.deepEqual(res, { success: true })
   t.true(services.db.updateDonatedAmount.calledWith({ organizationId: 'test-org-id', amount: recordBody.amount }))
   t.true(services.db.updateManuallyBilledRemainingDonation.calledWith({ organizationId: 'test-org-id', remainingDonation: 0 }))
+  t.true(services.dynamo.unlockOrg.calledWith({ organizationId: 'test-org-id' }))
+})
+
+test('process | success | manually billed org updates remaining donation amount -> still remaining donation', async (t) => {
+  const { services, testRecordManuallyBilled, testRecordManuallyBilledBody: recordBody } = t.context
+  services.db.getOrg.resolves({ name: 'flossbank', accessToken: 'asdf', remainingDonation: 2000000, billingInfo: { manuallyBilled: true } })
+  const res = await Process.process({
+    record: testRecordManuallyBilled,
+    ...services
+  })
+
+  t.deepEqual(res, { success: true })
+  t.true(services.db.updateDonatedAmount.calledWith({ organizationId: 'test-org-id', amount: recordBody.amount }))
+  t.true(services.db.updateManuallyBilledRemainingDonation.calledWith({ organizationId: 'test-org-id', remainingDonation: 1000000 }))
   t.true(services.dynamo.unlockOrg.calledWith({ organizationId: 'test-org-id' }))
 })
 
