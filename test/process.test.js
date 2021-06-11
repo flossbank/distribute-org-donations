@@ -9,7 +9,7 @@ test.beforeEach((t) => {
     distributeOrgDonation: sinon.stub(),
     updateDonatedAmount: sinon.stub(),
     createOrganizationOssUsageSnapshot: sinon.stub(),
-    updateManuallyBilledRemainingDonation: sinon.stub(),
+    decrimentManuallyBilledOrgRemainingDonation: sinon.stub(),
     getOrg: sinon.stub().resolves({ name: 'flossbank', accessToken: 'asdf', billingInfo: {} }),
     getPackage: sinon.stub().resolves({ name: 'standard', language: 'javascript', registry: 'npm' })
   }
@@ -175,7 +175,7 @@ test('process | success | manually billed org updates remaining donation amount 
 
   t.deepEqual(res, { success: true })
   t.true(services.db.updateDonatedAmount.calledWith({ organizationId: 'test-org-id', amount: recordBody.amount }))
-  t.true(services.db.updateManuallyBilledRemainingDonation.calledWith({ organizationId: 'test-org-id', remainingDonation: 0 }))
+  t.true(services.db.decrimentManuallyBilledOrgRemainingDonation.calledWith({ organizationId: 'test-org-id', amount: 1000000 }))
   t.true(services.dynamo.unlockOrg.calledWith({ organizationId: 'test-org-id' }))
 })
 
@@ -189,7 +189,7 @@ test('process | success | manually billed org updates remaining donation amount 
 
   t.deepEqual(res, { success: true })
   t.true(services.db.updateDonatedAmount.calledWith({ organizationId: 'test-org-id', amount: recordBody.amount }))
-  t.true(services.db.updateManuallyBilledRemainingDonation.calledWith({ organizationId: 'test-org-id', remainingDonation: 1000000 }))
+  t.true(services.db.decrimentManuallyBilledOrgRemainingDonation.calledWith({ organizationId: 'test-org-id', amount: 1000000 }))
   t.true(services.dynamo.unlockOrg.calledWith({ organizationId: 'test-org-id' }))
 })
 
