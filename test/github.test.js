@@ -100,7 +100,8 @@ test.serial('getAllManifestsForOrg | success', async (t) => {
     .get('/search/code').query(true)
     .reply(200, {
       items: [
-        { name: 'package.json', path: 'package.json' }
+        { name: 'package.json', path: 'package.json' },
+        { name: 'package.json', path: 'inner_repo/node_modules/package.json' }
       ]
     })
     .get('/repos/flossbank/cli/contents/package.json')
