@@ -1,7 +1,7 @@
 lockfileVersion: 5.3
 
 specifiers:
-  '@flossbank/registry-resolver': 2.2.1
+  '@flossbank/registry-resolver': 2.2.2
   '@octokit/app': ^4.2.1
   ava: ^3.12.1
   aws-sdk: ^2.543.0
@@ -20,7 +20,7 @@ specifiers:
   ulid: ^2.3.0
 
 dependencies:
-  '@flossbank/registry-resolver': 2.2.1
+  '@flossbank/registry-resolver': 2.2.2
   '@octokit/app': 4.2.1
   aws-sdk: 2.776.0
   call-limit: 1.1.1
@@ -257,8 +257,8 @@ packages:
       - supports-color
     dev: false
 
-  /@flossbank/registry-resolver/2.2.1:
-    resolution: {integrity: sha512-mtL13zSP8CPP/RKBz46X9p3UlNlvsKatxcsJC5EKjTpfSX+0O2sIASyHQvfwQoaFhaBec60ERL5JvHEUWUOOLg==}
+  /@flossbank/registry-resolver/2.2.2:
+    resolution: {integrity: sha512-jp/6DGgRBcyUI4stGasOVBd8CnyZ3uk0HqawYUgGvY6u8QcdD0JsSudd634j27sFIcsGhiPYcI/xvMa86ODMfg==}
     dependencies:
       '@snyk/ruby-semver': 3.0.2
       call-limit: 1.1.1
