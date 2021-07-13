@@ -5,11 +5,11 @@ const Process = require('../lib/process')
 test.beforeEach((t) => {
   const db = {
     getNoCompList: sinon.stub().resolves(new Set()),
-    getOrgAccessToken: sinon.stub().resolves({ name: 'flossbank', accessToken: 'asdf' }),
     distributeOrgDonation: sinon.stub(),
     updateDonatedAmount: sinon.stub(),
     createOrganizationOssUsageSnapshot: sinon.stub(),
-    getOrg: sinon.stub().resolves({ name: 'flossbank', accessToken: 'asdf' }),
+    decrimentManuallyBilledOrgRemainingDonation: sinon.stub(),
+    getOrg: sinon.stub().resolves({ name: 'flossbank', installationId: 'asdf', billingInfo: {} }),
     getPackage: sinon.stub().resolves({ name: 'standard', language: 'javascript', registry: 'npm' })
   }
   const dynamo = {
@@ -50,12 +50,17 @@ test.beforeEach((t) => {
   }
   const log = { info: sinon.stub() }
 
+  const config = {
+    getFlossbankOrgId: sinon.stub().returns('aaaaaaaaaaaa')
+  }
+
   t.context.services = {
     db,
     dynamo,
     resolver,
     retriever,
-    log
+    log,
+    config
   }
 
   t.context.recordBody = {
@@ -67,6 +72,17 @@ test.beforeEach((t) => {
   t.context.testRecord = {
     body: JSON.stringify(t.context.recordBody)
   }
+
+  t.context.testRecordManuallyBilledBody = {
+    amount: 1000000,
+    timestamp: 1234,
+    organizationId: 'test-org-id',
+    description: undefined
+  }
+  t.context.testRecordManuallyBilled = {
+    body: JSON.stringify(t.context.recordBody)
+  }
+
   t.context.undefinedOrgRecordBody = {
     amount: 1000000,
     timestamp: 1234,
@@ -150,6 +166,69 @@ test('process | success', async (t) => {
     topLevelDependencies: 4
   }))
   t.true(services.db.updateDonatedAmount.calledWith({ organizationId: 'test-org-id', amount: recordBody.amount }))
+  t.true(services.dynamo.unlockOrg.calledWith({ organizationId: 'test-org-id' }))
+})
+
+test('process | success | org with no installation id authenticates with flossbank installation id', async (t) => {
+  const { services, testRecordManuallyBilled } = t.context
+
+  // the returned org has no installation id
+  services.db.getOrg.onFirstCall().resolves({ name: 'sony' })
+  services.db.getOrg.onSecondCall().resolves({ name: 'flossbank', installationId: 'flossbank-install-id' })
+
+  const res = await Process.process({
+    record: testRecordManuallyBilled,
+    ...services
+  })
+
+  t.deepEqual(res, { success: true })
+
+  t.true(services.config.getFlossbankOrgId.calledOnce)
+  t.true(services.retriever.getAllManifestsForOrg.calledWith({
+    name: 'sony',
+    installationId: 'flossbank-install-id'
+  }, services.resolver.getSupportedManifestPatterns()))
+})
+
+test('process | failure | flossbank org does not have an installation id', async (t) => {
+  const { services, testRecordManuallyBilled } = t.context
+
+  // the returned org has no installation id
+  services.db.getOrg.onFirstCall().resolves({ name: 'sony' })
+  // flossbank also doesn't have an installation id
+  services.db.getOrg.onSecondCall().resolves({ name: 'flossbank' })
+
+  await t.throwsAsync(() => Process.process({
+    record: testRecordManuallyBilled,
+    ...services
+  }), { message: 'no installation id found on flossbank org' })
+})
+
+test('process | success | manually billed org updates remaining donation amount -> 0', async (t) => {
+  const { services, testRecordManuallyBilled, testRecordManuallyBilledBody: recordBody } = t.context
+  services.db.getOrg.resolves({ name: 'flossbank', installationId: 'asdf', remainingDonation: 1000000, billingInfo: { manuallyBilled: true } })
+  const res = await Process.process({
+    record: testRecordManuallyBilled,
+    ...services
+  })
+
+  t.deepEqual(res, { success: true })
+  t.true(services.db.updateDonatedAmount.calledWith({ organizationId: 'test-org-id', amount: recordBody.amount }))
+  t.true(services.db.decrimentManuallyBilledOrgRemainingDonation.calledWith({ organizationId: 'test-org-id', amount: 1000000 }))
+  t.true(services.dynamo.unlockOrg.calledWith({ organizationId: 'test-org-id' }))
+})
+
+test('process | success | manually billed org updates remaining donation amount -> still remaining donation', async (t) => {
+  const { services, testRecordManuallyBilled, testRecordManuallyBilledBody: recordBody } = t.context
+  services.db.getOrg.resolves({ name: 'flossbank', installationId: 'asdf', remainingDonation: 2000000, billingInfo: { manuallyBilled: true } })
+  const res = await Process.process({
+    record: testRecordManuallyBilled,
+    ...services
+  })
+
+  t.deepEqual(res, { success: true })
+  t.true(services.db.updateDonatedAmount.calledWith({ organizationId: 'test-org-id', amount: recordBody.amount }))
+  t.true(services.db.decrimentManuallyBilledOrgRemainingDonation.calledWith({ organizationId: 'test-org-id', amount: 1000000 }))
   t.true(services.dynamo.unlockOrg.calledWith({ organizationId: 'test-org-id' }))
 })
 
