@@ -9,7 +9,7 @@
     "test": "standard && ava -v"
   },
   "dependencies": {
-    "@flossbank/registry-resolver": "^2.1.0",
+    "@flossbank/registry-resolver": "2.2.2",
     "@octokit/app": "^4.2.1",
     "aws-sdk": "^2.543.0",
     "call-limit": "^1.1.1",

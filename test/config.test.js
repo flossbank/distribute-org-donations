@@ -17,6 +17,13 @@ test.beforeEach((t) => {
   })
 })
 
+test('getFlossbankOrgId returns from env', (t) => {
+  const { config } = t.context
+  process.env.FLOSSBANK_ORG_ID = 'aaaaaaaaaaaa'
+
+  t.is(config.getFlossbankOrgId(), 'aaaaaaaaaaaa')
+})
+
 test('getMongoUri decrypts with kms and caches result', async (t) => {
   const { config } = t.context
   process.env.MONGO_URI = Buffer.from('abc').toString('base64')
