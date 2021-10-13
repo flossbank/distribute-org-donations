@@ -100,8 +100,7 @@ test.serial('getAllManifestsForOrg | success', async (t) => {
     .get('/search/code').query(true)
     .reply(200, {
       items: [
-        { name: 'package.json', path: 'package.json' },
-        { name: 'package.json', path: 'inner_repo/node_modules/package.json' }
+        { name: 'package.json', path: 'package.json' }
       ]
     })
     .get('/repos/flossbank/cli/contents/package.json')
@@ -162,4 +161,38 @@ test.serial('getAllManifestsForOrg | bad github response to search', async (t) =
   t.notThrows(() => scope.done())
 
   t.deepEqual(manifests, [])
+})
+
+test.serial('getAllManifestsForOrg | caches', async (t) => {
+  const { ghr } = t.context
+
+  const scope = nock('https://api.github.com')
+    .get('/orgs/flossbank/repos')
+    .reply(200, [{ full_name: 'flossbank/cli', name: 'cli', owner: { login: 'flossbank' } }])
+    .get('/search/code').query(true)
+    .reply(200, {
+      items: [{ name: 'package.json', path: 'package.json' }]
+    })
+    .get('/repos/flossbank/cli/contents/package.json')
+    .reply(200, { content: Buffer.from('cli_package.json').toString('base64') })
+
+  const searchPattern = [{
+    registry: 'npm',
+    language: 'javascript',
+    patterns: ['package.json']
+  }]
+  const org = {
+    name: 'flossbank',
+    installationId: '1234567'
+  }
+  const manifestsFirst = await ghr.getAllManifestsForOrg(org, searchPattern, 'token')
+  t.notThrows(() => scope.done())
+
+  // only call made will be to download the package.json; the repos and search results are cached
+  scope.get('/repos/flossbank/cli/contents/package.json')
+    .reply(200, { content: Buffer.from('cli_package.json').toString('base64') })
+
+  const manifestsSecond = await ghr.getAllManifestsForOrg(org, searchPattern, 'token')
+  t.notThrows(() => scope.done())
+  t.deepEqual(manifestsFirst, manifestsSecond)
 })
