@@ -25,6 +25,7 @@ Resources:
   DistributeOrgDonationsFunction:
     Type: AWS::Serverless::Function
     Properties:
+      MemorySize: 2048
       Timeout: 900
       Handler: index.handler
       Runtime: nodejs12.x
